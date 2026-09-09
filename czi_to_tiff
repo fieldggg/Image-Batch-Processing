@@ -1,0 +1,71 @@
+// Batch convert CZI files to split-channel TIFFs
+// C1 = DAPI, C2 = FUS, C3 = NeuN
+//this should be your directory to your unprocessed images (mine were carl zeiss images (.czi) so if yours are different change line 28 to your file type!! 
+inputDir = "your path";
+outputDir = inputDir + "tiffs/";
+
+// Make output folder if it does not exist
+File.makeDirectory(outputDir);
+
+// Load Bio-Formats
+run("Bio-Formats Macro Extensions");
+
+list = getFileList(inputDir);
+
+setBatchMode(true);
+
+for (i = 0; i < list.length; i++) {
+  
+  fileName = list[i];
+  
+  // Skip folders
+  if (File.isDirectory(inputDir + fileName)) {
+    continue;
+  }
+  
+  // Only process .czi files
+  lowerName = toLowerCase(fileName);
+  if (!endsWith(lowerName, ".czi")) {
+    continue;
+  }
+  
+  fullPath = inputDir + fileName;
+  
+  // Get base/original file name without .czi
+  baseName = replace(fileName, ".czi", "");
+  baseName = replace(baseName, ".CZI", "");
+  
+  // Open CZI with Bio-Formats
+  run("Bio-Formats Importer", 
+      "open=[" + fullPath + "] autoscale color_mode=Default view=Hyperstack stack_order=XYCZT");
+  
+  originalTitle = getTitle();
+  
+  // Split channels
+  run("Split Channels");
+  
+  // Save C1 as DAPI
+  selectWindow("C1-" + originalTitle);
+  saveAs("Tiff", outputDir + baseName + "_DAPI.tif");
+  close();
+  
+  // Save C2 as the name of your 488 stain
+  selectWindow("C2-" + originalTitle);
+  saveAs("Tiff", outputDir + baseName + "_C1.tif");
+  close();
+  
+  // Save C3 as the name of your 568 stain
+  selectWindow("C3-" + originalTitle);
+  saveAs("Tiff", outputDir + baseName + "_C3.tif");
+  close();
+  
+  // Close anything extra if still open
+  while (nImages > 0) {
+    selectImage(nImages);
+    close();
+  }
+}
+
+setBatchMode(false);
+
+print("Done! Split-channel TIFFs saved in: " + outputDir);
