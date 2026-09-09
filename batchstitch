@@ -1,0 +1,107 @@
+// Batch export ONLY the two full-resolution scans from each CZI and save ONLY DAPI + 488 (x) as a 2-channel TIFF.
+// Edit dapiCh and x488Ch if your channel order differs.
+
+inputDir  = "/Users/gracefields/Desktop/x/czis/";
+outputDir = "/Users/gracefields/Desktop/x/tiffs/";
+
+// Full-res series indices (0-based in macro string)
+seriesFirstFullRes  = 0; // UI Series 1
+seriesSecondFullRes = 7; // UI Series 6
+
+// Channel mapping in the imported hyperstack (1-based)
+dapiCh  = 1;
+x488Ch = 2;
+
+// FAST MODE (no windows). Change to false if you want to watch it run.
+setBatchMode(true);
+
+list = getFileList(inputDir);
+if (list.length == 0) exit("No files found in input directory.");
+
+for (i = 0; i < list.length; i++) {
+  
+  name = list[i];
+  if (File.isDirectory(inputDir + name)) continue;
+  if (!endsWith(toLowerCase(name), ".czi")) continue;
+  
+  fullpath = inputDir + name;
+  
+  base = replace(name, ".czi", "");
+  base = replace(base, ".CZI", "");
+  
+  // Export both full-res scans
+  exportTwoChannels(fullpath, outputDir, base, seriesFirstFullRes,  "Scan1_fullres", dapiCh, x488Ch);
+  exportTwoChannels(fullpath, outputDir, base, seriesSecondFullRes, "Scan2_fullres", dapiCh, x488Ch);
+}
+
+setBatchMode(false);
+xint("Done. Saved only the two full-res scans per CZI with DAPI + 488 channels.");
+
+
+// ---------------- FUNCTIONS ----------------
+  
+  function exportTwoChannels(fullpath, outputDir, base, seriesIndex, label, dapiCh, x488Ch) {
+    
+    // Open selected series as hyperstack
+    run("Bio-Formats Importer",
+        "open=[" + fullpath + "] " +
+          "series_" + seriesIndex + " " +
+          "autoscale color_mode=Default view=Hyperstack stack_order=XYCZT");
+    
+    // Active window is the imported hyperstack
+    origTitle = getTitle();
+    
+    // Duplicate ONLY DAPI channel (xeserves Z/T if xesent)
+    run("Duplicate...", "title=DAPI_only duplicate channels=" + dapiCh);
+    dapiTitle = getTitle();
+    
+    // Duplicate ONLY 488 channel
+    selectWindow(origTitle);
+    run("Duplicate...", "title=x488_only duplicate channels=" + x488Ch);
+    xTitle = getTitle();
+    
+    // Record windows before merge so we can detect the merged window name reliably
+    before = getList("image.titles");
+    
+    // Merge into a 2-channel image (c1=DAPI, c2=488)
+    run("Merge Channels...", "c1=[" + dapiTitle + "] c2=[" + xTitle + "] create");
+    
+    mergedTitle = findNewImageTitle(before);
+    if (mergedTitle == "") exit("Could not find merged image window after Merge Channels.");
+    
+    // Save merged TIFF
+    selectWindow(mergedTitle);
+    outPath = outputDir + base + "_" + label + "_DAPI_488.tif";
+    saveAs("Tiff", outPath);
+    
+    // Close everything for this series
+    if (isOpen(mergedTitle)) { selectWindow(mergedTitle); close(); }
+    if (isOpen(dapiTitle))   { selectWindow(dapiTitle); close(); }
+    if (isOpen(xTitle))     { selectWindow(xTitle); close(); }
+    if (isOpen(origTitle))   { selectWindow(origTitle); close(); }
+  }
+
+function findNewImageTitle(beforeList) {
+  afterList = getList("image.titles");
+  for (i = 0; i < afterList.length; i++) {
+    t = afterList[i];
+    if (!titleInList(t, beforeList)) return t;
+  }
+  return "";
+}
+
+function titleInList(t, L) {
+  for (j = 0; j < L.length; j++) {
+    if (L[j] == t) return true;
+  }
+  return false;
+}
+
+function isOpen(title) {
+  titles = getList("image.titles");
+  for (ii = 0; ii < titles.length; ii++) {
+    if (titles[ii] == title) return true;
+  }
+  return false;
+}
+
