@@ -1,0 +1,76 @@
+// FIJI / ImageJ Macro
+// Remove channel 4, recolor C1–C3, save as new TIFF
+// directory your images are located
+inputDir  = "path to original folder with images";
+// directory your images should be saved to
+outputDir = "path to new folder";
+
+if (!File.exists(outputDir)) File.makeDirectory(outputDir);
+
+list = getFileList(inputDir);
+if (list.length == 0) exit("No files found.");
+
+setBatchMode(true);
+
+for (i = 0; i < list.length; i++) {
+  
+  name = list[i];
+  lower = toLowerCase(name);
+  
+  if (!(endsWith(lower, ".tif") || endsWith(lower, ".tiff")))
+    continue;
+  
+  open(inputDir + name);
+  origTitle = getTitle();
+  
+  // Split channels
+  run("Split Channels");
+  
+  // Build channel window names
+  c1 = "C1-" + origTitle;
+  c2 = "C2-" + origTitle;
+  c3 = "C3-" + origTitle;
+  c4 = "C4-" + origTitle;
+  
+  // Close channel 4 if it exists
+  if (isOpen(c4)) {
+    selectWindow(c4);
+    close();
+  }
+  
+  // Merge ONLY channels 1–3 (note the brackets)
+  run("Merge Channels...",
+      "c1=[" + c1 + "] " +
+        "c2=[" + c2 + "] " +
+        "c3=[" + c3 + "] " +
+        "create");
+  
+  // Close split channels
+  if (isOpen(c1)) { selectWindow(c1); close(); }
+  if (isOpen(c2)) { selectWindow(c2); close(); }
+  if (isOpen(c3)) { selectWindow(c3); close(); }
+  
+  // Make composite and apply LUTs
+  run("Make Composite");
+  Stack.setChannel(1); run("Blue");
+  Stack.setChannel(2); run("Green");
+  Stack.setChannel(3); run("Red");
+  
+  // Build output filename
+  dot = lastIndexOf(name, ".");
+  if (dot >= 0) {
+    base = substring(name, 0, dot);
+    ext  = substring(name, dot);
+  } else {
+    base = name;
+    ext  = ".tif";
+  }
+  
+  newName = base + "_colorfixed" + ext;
+  
+  saveAs("Tiff", outputDir + newName);
+  close();
+}
+
+setBatchMode(false);
+print("Done: channel 4 removed, files recolored and saved.");
